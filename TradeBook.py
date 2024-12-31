@@ -87,7 +87,8 @@ class trade_book:
             "rsi": current_candle.rsi,
             "mor": mor_dict["indicator"],
             "mor_age": mor_dict["age"],
-            "mor_date":mor_dict["time"].replace(tzinfo=None)
+            "mor_date": mor_dict["time"].replace(tzinfo=None),
+            "price_above_200_sma": mor_dict["ma_200_cross"],
         }]
         new_data = pd.DataFrame(data)
     
@@ -95,14 +96,14 @@ class trade_book:
         #if True:
     
             # Ensure matching columns between existing_data and new_data
-            for col in ["volume_change", "price_change", "date", "open", "high", "low", "close", "volume", "volume_20_ma", "rsi", "mor", "mor_age", "mor_date"]:
+            for col in ["volume_change", "price_change", "date", "open", "high", "low", "close", "volume", "volume_20_ma", "rsi", "mor", "mor_age", "mor_date", "price_above_200_sma"]:
                 if col in self.existing_data.columns and col in new_data.columns:
                     new_data[col] = new_data[col].astype(self.existing_data[col].dtype, errors="ignore")
     
             # Update matching stock row or append if it doesn't exist
             if stock in self.existing_data["name"].values:
                 # Replace matching columns with new data
-                for col in ["volume_change", "price_change", "date", "open", "high", "low", "close", "volume", "volume_20_ma", "rsi", "mor", "mor_age", "mor_date"]:
+                for col in ["volume_change", "price_change", "date", "open", "high", "low", "close", "volume", "volume_20_ma", "rsi", "mor", "mor_age", "mor_date", "price_above_200_sma"]:
                     self.existing_data.loc[self.existing_data["name"] == stock, col] = new_data[col].values[0]
             else:
                 # Append new row for non-existing stock
@@ -132,5 +133,26 @@ class trade_book:
         with pd.ExcelWriter(self.file_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
             self.existing_data.to_excel(writer, self.sheet_name, index=False)
 
+
+    def update_backtrace_sheet(self, stock, phase, entry_candle, exit_candle):
+        if phase == "Bull" :
+            profit_loss = ((getattr(exit_candle, 'close') - getattr(entry_candle, 'close'))/getattr(entry_candle, 'close')) * 100
+        else:
+            profit_loss = ((getattr(entry_candle, 'close') - getattr(exit_candle, 'close'))/getattr(entry_candle, 'close')) * 100
+
+        data = [{
+            "name": stock,
+            "phase": phase, 
+            "entry_price":getattr(entry_candle, 'close'),
+            "entry_date": getattr(entry_candle, 'time').replace(tzinfo=None),
+            "exit_price": getattr(exit_candle, 'close'),
+            "exit_date":  getattr(exit_candle, 'time').replace(tzinfo=None),
+            "PL": profit_loss,
+        }]
+        new_data = pd.DataFrame(data)
+        self.existing_data = pd.concat([self.existing_data, new_data], ignore_index=True)
+
+    def empty_backtrace_Sheet(self):
+        self.existing_data = pd.DataFrame()
 
 

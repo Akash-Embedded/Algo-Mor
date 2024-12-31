@@ -20,7 +20,7 @@ class smart_client:
         self.ema_periods = [2, 5, 8, 12, 13, 15, 20, 25, 30, 35, 40, 45, 50]
         self.sma_periods = [200]
         self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'rsi'] + \
-                                 [f'EMA_{period}' for period in self.ema_periods], \
+                                 [f'EMA_{period}' for period in self.ema_periods] + \
                                  [f'SMA_{period}' for period in self.sma_periods])
         # Define the NamedTuple for Stock Data
         self.stock_data = namedtuple('stock_data', ['name', 'history'])
@@ -85,8 +85,7 @@ class smart_client:
        # Use the provided end_date or default to the current datetime
         if end_date is None:
             end_date = dt.datetime.now()
-        # Calculate the start and end date-time
-        end_date = dt.datetime.now()
+
         start_date = end_date - dt.timedelta(minutes=total_minutes)
         #for ticker in tickers:
         symboltoken = self.token_lookup(ticker)

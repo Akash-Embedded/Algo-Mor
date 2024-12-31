@@ -28,7 +28,7 @@ def main():
         if True:
             print("Processing stock - ",stock)
             print(datetime.now())
-            current_stocks_data = client.get_historical_data(stock, "ONE_DAY", 350)
+            current_stocks_data = client.get_historical_data(stock, "ONE_DAY", 650)
             if current_stocks_data != {}:
                 mor_dict = mor.indicator(current_stocks_data[stock]['candles'])
                 #short_dict= short_cluster.indicator(current_stocks_data[stock]['candles'])

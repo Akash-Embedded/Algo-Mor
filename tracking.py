@@ -5,7 +5,7 @@ from collections import namedtuple
 from datetime import datetime
 
 class base_strategy:
-    def check_crossovers(self, hist_data, short_term_periods, long_term_periods):
+    def check_crossovers(self, hist_data, crossing_periods, base_periods):
 
         # Iterate through each row of data to check for crossovers
         first_clear_signal = "No Signal"
@@ -17,20 +17,20 @@ class base_strategy:
         idx = 0
         for idx in range(len(hist_data) - 1, 0, -1):
             days_count += 1
-            short_ema = []
-            for period in short_term_periods:
-                short_ema.append(getattr(hist_data[idx], f'EMA_{period}'))
+            crossing_ma = []
+            for period in crossing_periods:
+                crossing_ma.append(getattr(hist_data[idx], f'EMA_{period}'))
 
-            long_ema = []
-            for period in long_term_periods:
-                long_ema.append(getattr(hist_data[idx], f'EMA_{period}'))
-            #print(min(long_ema))
-            short_ema.sort()
-            long_ema.sort()
-            if (short_ema[-1] < long_ema[0]):
+            base_ma = []
+            for period in base_periods:
+                base_ma.append(getattr(hist_data[idx], f'EMA_{period}'))
+            #print(min(base_ma))
+            crossing_ma.sort()
+            base_ma.sort()
+            if (crossing_ma[-1] < base_ma[0]):
                 signal = "Bear"
             
-            if (short_ema[0] > long_ema[-1]):
+            if (crossing_ma[0] > base_ma[-1]):
                 signal = "Bull"
 
             if (signal == "Bull" or signal == "Bear" ):
@@ -44,20 +44,20 @@ class base_strategy:
             signal =  "No Signal"
             for i in range(idx, len(hist_data)):
                 days_count -= 1
-                short_ema = []
-                for period in short_term_periods:
-                    short_ema.append(getattr(hist_data[i], f'EMA_{period}'))
+                crossing_ma = []
+                for period in crossing_periods:
+                    crossing_ma.append(getattr(hist_data[i], f'EMA_{period}'))
 
-                long_ema = []
-                for period in long_term_periods:
-                    long_ema.append(getattr(hist_data[i], f'EMA_{period}'))
+                base_ma = []
+                for period in base_periods:
+                    base_ma.append(getattr(hist_data[i], f'EMA_{period}'))
 
-                short_ema.sort()
-                long_ema.sort()
-                if (short_ema[-1] < long_ema[0]):
+                crossing_ma.sort()
+                base_ma.sort()
+                if (crossing_ma[-1] < base_ma[0]):
                     signal = "Bear"
             
-                if (short_ema[0] > long_ema[-1]):
+                if (crossing_ma[0] > base_ma[-1]):
                     signal = "Bull"
 
                 
@@ -65,19 +65,27 @@ class base_strategy:
                     return_dict["time"]= hist_data[i].time
                     return_dict["indicator"]= signal
                     return_dict["age"] = days_count
-
+                    if getattr(hist_data[i], f'SMA_200') is not None:
+                        if getattr(hist_data[i], f'close') >  getattr(hist_data[i], f'SMA_200') :
+                            return_dict["ma_200_cross"] = "True"
+                        else:
+                            return_dict["ma_200_cross"] = "False"
+                    else:
+                        return_dict["ma_200_cross"] = ""
                     return return_dict 
         
         return_dict["time"]= datetime.now()
         return_dict["indicator"]= "No Signal"
         return_dict["age"] = 0
+        return_dict["ma_200_cross"] = ""
         return return_dict
 
 class Mor(base_strategy):
-    def __init__(self, short_term_periods, long_term_periods):
+    def __init__(self, short_term_ema_periods, long_term_ema_periods, long_term_ma = []):
         # Define short-term and long-term EMA periods
-        self.short_term_periods = short_term_periods
-        self.long_term_periods = long_term_periods
+        self.short_term_ema_periods = short_term_ema_periods
+        self.long_term_ema_periods = long_term_ema_periods
+        self.long_term_ma = long_term_ma
 
     def indicator(self, hist_data):
         """
@@ -97,10 +105,11 @@ class Mor(base_strategy):
             return_dict["time"]= datetime.now()
             return_dict["indicator"]= "No Signal"
             return_dict["age"] = 0
+            return_dict["ma_200_cross"] = ""
             return return_dict
 
         # Check for crossovers and continuous trends
-        return_dict = self.check_crossovers(hist_data, self.short_term_periods, self.long_term_periods)
+        return_dict = self.check_crossovers(hist_data, self.short_term_ema_periods, self.long_term_ema_periods)
     
         return return_dict
 
