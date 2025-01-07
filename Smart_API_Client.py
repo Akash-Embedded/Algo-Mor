@@ -17,7 +17,7 @@ class smart_client:
         self.credential_path = credential_path
         self.obj = None
         self.instrument_list = None
-        self.ema_periods = [2, 5, 8, 12, 13, 15, 20, 25, 30, 35, 40, 45, 50]
+        self.ema_periods = [2, 5, 8, 12, 13, 15, 20, 21, 25, 30, 35, 40, 45, 50]
         self.sma_periods = [200]
         self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'rsi'] + \
                                  [f'EMA_{period}' for period in self.ema_periods] + \
@@ -183,11 +183,11 @@ class smart_client:
         stocks_data = []
         for index, stock in enumerate(stocks):
             start_time = time.time()  # Record the start time of the iteration
-            print(f"Processing stock at index {index}: {stock}")
+            #print(f"Processing stock at index {index}: {stock}")
             stock_history = self.get_historical_data(stock, "ONE_DAY", 50)
             stock_entry = self.stock_data(name=stock, history=stock_history)
             stocks_data.append(stock_entry)
-            print(stocks_data[-1].name)
+            #print(stocks_data[-1].name)
 
             # Calculate elapsed time and sleep to maintain 3 iterations per second
             elapsed_time = time.time() - start_time
@@ -203,3 +203,16 @@ class smart_client:
         return stocks_data
     def position(self, action, stock_name):
         print(">>>>>>> ", action, stock_name)
+    
+    def get_day_volume(self, stock, date):
+        stock_history = self.get_historical_data(stock, "ONE_MINUTE", 390)
+        # Get date in the same format as in the data
+        #date = date.strftime('%Y-%m-%d')
+
+        # Filter candles to include only rows from today
+        filtered_candles = [
+            row for row in stock_history[stock]['candles']
+            if row["time"].startswith(date)
+        ]
+        stock_history[stock]['candles'] = filtered_candles
+

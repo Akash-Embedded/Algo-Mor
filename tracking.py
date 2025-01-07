@@ -73,7 +73,14 @@ class base_strategy:
                     else:
                         return_dict["ma_200_cross"] = ""
                     return return_dict 
-        
+        elif (first_clear_signal != "No Signal" and second_clear_signal == "No Signal" and idx == 1):
+            return_dict["time"]= hist_data[idx].time
+            return_dict["indicator"]= first_clear_signal
+            return_dict["age"] = len(hist_data) - 1 # bug: related to find the previous candle 
+            return_dict["ma_200_cross"] = ""
+            return return_dict
+
+
         return_dict["time"]= datetime.now()
         return_dict["indicator"]= "No Signal"
         return_dict["age"] = 0
@@ -100,13 +107,14 @@ class Mor(base_strategy):
         # Ensure historical data contains at least 200 candles
         return_dict = {}
 
-        if len(hist_data) < 200:
-            print("Insufficient data. At least 200 candles are required.")
-            return_dict["time"]= datetime.now()
-            return_dict["indicator"]= "No Signal"
-            return_dict["age"] = 0
-            return_dict["ma_200_cross"] = ""
-            return return_dict
+
+        #if len(hist_data) < 200:
+        #    print("Insufficient data. At least 200 candles are required.")
+        #    return_dict["time"]= datetime.now()
+        #    return_dict["indicator"]= "No Signal"
+        #    return_dict["age"] = 0
+        #    return_dict["ma_200_cross"] = ""
+        #    return return_dict
 
         # Check for crossovers and continuous trends
         return_dict = self.check_crossovers(hist_data, self.short_term_ema_periods, self.long_term_ema_periods)

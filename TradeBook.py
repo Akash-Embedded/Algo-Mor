@@ -134,15 +134,11 @@ class trade_book:
             self.existing_data.to_excel(writer, self.sheet_name, index=False)
 
 
-    def update_backtrace_sheet(self, stock, phase, entry_candle, exit_candle):
-        if phase == "Bull" :
-            profit_loss = ((getattr(exit_candle, 'close') - getattr(entry_candle, 'close'))/getattr(entry_candle, 'close')) * 100
-        else:
-            profit_loss = ((getattr(entry_candle, 'close') - getattr(exit_candle, 'close'))/getattr(entry_candle, 'close')) * 100
-
+    def update_backtrace_sheet(self, stock, phase, entry_candle, exit_candle, mor_age, profit_loss):
         data = [{
             "name": stock,
             "phase": phase, 
+            "age" : mor_age,
             "entry_price":getattr(entry_candle, 'close'),
             "entry_date": getattr(entry_candle, 'time').replace(tzinfo=None),
             "exit_price": getattr(exit_candle, 'close'),
@@ -151,6 +147,40 @@ class trade_book:
         }]
         new_data = pd.DataFrame(data)
         self.existing_data = pd.concat([self.existing_data, new_data], ignore_index=True)
+
+    def update_backtrace_summry(self, total_profit_loss):
+        data = [{
+            "total_profit_loss": total_profit_loss,
+        }]
+        new_data = pd.DataFrame(data)
+        self.existing_data = pd.concat([self.existing_data, new_data], ignore_index=True)
+
+    def summerised_monthly_profit(self, date_column_name, profit_column_name, stock_column_name):
+        # Ensure the DateTime column is in datetime format
+        self.existing_data['DateTime'] = pd.to_datetime(self.existing_data[date_column_name])
+
+        # Extract year and month
+        self.existing_data['Year-Month'] = self.existing_data['DateTime'].dt.to_period('M')
+
+        # Group by Year-Month and calculate total profit/loss
+        summary = self.existing_data.groupby('Year-Month')[profit_column_name].sum().reset_index()
+
+        # Convert Year-Month back to string for better Excel compatibility
+        summary['Year-Month'] = summary['Year-Month'].astype(str)
+
+        # Save the summary to a new sheet in the same workbook
+        with pd.ExcelWriter(self.file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+            summary.to_excel(writer, sheet_name="summary-total", index=False)
+
+        # Group by Year-Month and calculate total profit/loss
+        summary = self.existing_data.groupby(['Year-Month', stock_column_name])[profit_column_name].sum().reset_index()
+
+        # Convert Year-Month back to string for better Excel compatibility
+        summary['Year-Month'] = summary['Year-Month'].astype(str)
+
+        # Save the summary to a new sheet in the same workbook
+        with pd.ExcelWriter(self.file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+            summary.to_excel(writer, sheet_name="summary-stock", index=False)
 
     def empty_backtrace_Sheet(self):
         self.existing_data = pd.DataFrame()

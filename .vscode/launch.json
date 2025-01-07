@@ -1,12 +1,14 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-          "name": "Python: Main Script",
-          "request": "launch",
-          "program": "${workspaceFolder}/main.py",
-          "console": "integratedTerminal",
-          "cwd": "${workspaceFolder}"
-        },
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      //"args": ["TradeBook_Nifty20_Indicator.xlsx"]  // Replace with your actual arguments
+      "args": ["indices\\nifty50.xlsx"]  // Replace with your actual arguments
+    }
+  ]
 }
