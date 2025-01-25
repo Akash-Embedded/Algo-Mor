@@ -3,7 +3,7 @@
 set folder_path=.\indices
 
 :: Loop through all Excel files in the folder
-for %%f in (".\nifty*.xlsx") do (
+for %%f in (".\*.xlsx") do (
     echo Processing %%f
     python ..\backtrace\backtrace_short_term_cluster.py ".\indices%%f"
 )

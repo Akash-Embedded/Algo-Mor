@@ -118,6 +118,47 @@ class Mor(base_strategy):
 
         # Check for crossovers and continuous trends
         return_dict = self.check_crossovers(hist_data, self.short_term_ema_periods, self.long_term_ema_periods)
-    
         return return_dict
+    
+    def signal_end(self,hist_data, index, with_in_days, current_signal):
+        signal = "No Signal"
+        if current_signal == "Bull":
+            search_signal = "Bear"
+        elif current_signal == "Bear":
+            search_signal = "Bull"
+        crossing_periods = self.short_term_ema_periods
+        base_periods = self.long_term_ema_periods
+        return_dict = {}
+        idx = 0
+        for idx in range(index, index + with_in_days, 1):
+            crossing_ma = []
+            for period in crossing_periods:
+                crossing_ma.append(getattr(hist_data[idx], f'EMA_{period}'))
+
+            base_ma = []
+            for period in base_periods:
+                base_ma.append(getattr(hist_data[idx], f'EMA_{period}'))
+
+            crossing_ma.sort()
+            base_ma.sort()
+            if (crossing_ma[-1] < base_ma[0]):
+                signal = "Bear"
+            
+            if (crossing_ma[0] > base_ma[-1]):
+                signal = "Bull"
+             
+            if signal == search_signal:
+                return_dict["time"]= hist_data[idx].time
+                return_dict["indicator"]= current_signal
+                return_dict["age"] = idx - index
+                return_dict["ma_200_cross"] = ""
+                return return_dict
+        
+        return_dict["time"]= hist_data[idx].time
+        return_dict["indicator"]= current_signal
+        return_dict["age"] = with_in_days
+        return_dict["ma_200_cross"] = ""
+        return return_dict
+    
+        
 

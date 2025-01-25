@@ -182,6 +182,15 @@ class trade_book:
         with pd.ExcelWriter(self.file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
             summary.to_excel(writer, sheet_name="summary-stock", index=False)
 
+        # Group by Year-Month and calculate total profit/loss
+        summary = self.existing_data.groupby(stock_column_name)[profit_column_name].sum().reset_index()
+
+        # Convert Year-Month back to string for better Excel compatibility
+        summary[stock_column_name] = summary[stock_column_name].astype(str)
+
+        # Save the summary to a new sheet in the same workbook
+        with pd.ExcelWriter(self.file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+            summary.to_excel(writer, sheet_name="summary-stockWise", index=False)
     def empty_backtrace_Sheet(self):
         self.existing_data = pd.DataFrame()
 
