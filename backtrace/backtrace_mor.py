@@ -26,7 +26,7 @@ def main():
     client = broker.smart_client(r'D:\Akash\Share Market\Algo\MyAlgo')
     # Load the book stock list
     book = excel_book.trade_book(file_path, "backtrace")
-    book.empty_backtrace_Sheet()
+    book.empty_Sheet()
     short_term_periods = [2, 5, 8, 12, 15, 20]
     long_term_periods = [25, 30, 35, 40, 45]
     mor = Mor(short_term_periods, long_term_periods)

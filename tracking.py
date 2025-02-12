@@ -94,7 +94,7 @@ class Mor(base_strategy):
         self.long_term_ema_periods = long_term_ema_periods
         self.long_term_ma = long_term_ma
 
-    def indicator(self, hist_data):
+    def indicator(self, hist_data, sma_200 = False):
         """
         Analyze the trading signal based on EMA crossovers and trends.
     

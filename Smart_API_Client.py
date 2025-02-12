@@ -50,19 +50,27 @@ class smart_client:
         response = urllib.request.urlopen(instrument_url)
         self.instrument_list = json.loads(response.read().decode("utf-8"))
 
-    def token_lookup(self, ticker, exchange="NSE"):
+    def token_lookup(self, ticker, symbol='', exchange="NSE"):
         """Find the token for a given ticker."""
-        for instrument in self.instrument_list:
-            if (
-                instrument["name"] == ticker
-                and instrument["exch_seg"] == exchange
-                and instrument["symbol"].split("-")[-1] == "EQ"
-            ):
-                return instrument["token"]
+        if symbol == '':
+            for instrument in self.instrument_list:
+                if (
+                    instrument["name"] == ticker
+                    and instrument["exch_seg"] == exchange
+                    and instrument["symbol"].split("-")[-1] == "EQ"
+                ):
+                    return instrument["token"]
+        elif symbol == "indices":
+            for instrument in self.instrument_list:
+                if (
+                    instrument["symbol"] == ticker
+                    and instrument["exch_seg"] == exchange
+                ):
+                    return instrument["token"]
         print("ticker not found\n")
         return None
 
-    def get_historical_data(self, ticker, duration, number_of_candle, end_date=None):
+    def get_historical_data(self, ticker, duration, number_of_candle, end_date=None, symbol=''):
         hist_data_tickers = {}
     
         # Define mapping of duration to minutes
@@ -88,7 +96,7 @@ class smart_client:
 
         start_date = end_date - dt.timedelta(minutes=total_minutes)
         #for ticker in tickers:
-        symboltoken = self.token_lookup(ticker)
+        symboltoken = self.token_lookup(ticker, symbol)
         if symboltoken == None:
             return hist_data_tickers
         try:
@@ -116,6 +124,8 @@ class smart_client:
                 
                 for period in self.sma_periods:
                     df[f'SMA_{period}'] = df['close'].rolling(period).mean()
+
+                #self.calculate_rsi(df, 14)
 
                 # Convert DataFrame rows into a list of 'candle' namedtuples
                 candle_list = []
@@ -147,6 +157,17 @@ class smart_client:
     def calculate_ema(series, n=9):
         """Calculate Exponential Moving Average (EMA)."""
         return series.ewm(span=n, adjust=False).mean()
+    
+    def calculate_rsi(df, period=14):
+            # Add RSI Calculation
+            period = 14  # Default RSI period
+            delta = df['close'].diff()
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+            avg_gain = gain.rolling(window=period, min_periods=1).mean()
+            avg_loss = loss.rolling(window=period, min_periods=1).mean()
+            rs = avg_gain / avg_loss
+            df['RSI'] = 100 - (100 / (1 + rs))
 
     @staticmethod
     def calculate_macd(df, a=12, b=26, c=9):

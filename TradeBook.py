@@ -2,6 +2,7 @@ import pandas as pd
 from collections import namedtuple
 import SMART_API_CONSTANT as CONST
 import openpyxl
+from openpyxl import load_workbook
 
 class trade_book:
     def __init__(self, file_path: str, sheet_name):
@@ -112,6 +113,96 @@ class trade_book:
         except Exception as e:
             print(f"Error updating indicators sheet: {e}")
 
+    def calculate_monthly_ohlc(self, candles, stock):
+        df = pd.DataFrame(candles)
+    
+        # Ensure datetime format and remove timezone
+        df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
+        df.sort_values("time", inplace=True)
+    
+        # Identify last Thursday of each month
+        df["year_month"] = df["time"].dt.to_period("M")
+        
+        # Find the last day of the month for each row
+        df["last_day_of_month"] = df["time"].dt.to_period("M").dt.to_timestamp() + pd.offsets.MonthEnd(0)
+    
+        # Find the last Thursday of the month
+        df["last_thursday"] = df["last_day_of_month"] - pd.to_timedelta((df["last_day_of_month"].dt.weekday - 3) % 7, unit='D')
+        
+        # Identify if the current row is the last Thursday of the month
+        df["is_last_thursday"] = df["time"] == df["last_thursday"]
+    
+        # Mark month changes
+        df["month_group"] = df["is_last_thursday"].shift(1).fillna(False).cumsum()
+    
+        # Aggregate to get monthly OHLC and percentage change
+        monthly_df = df.groupby("month_group").agg(
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+            start_date=("time", "first"),
+            end_date=("time", "last"),
+        )
+    
+        # Remove timezone from start_date and end_date before writing to Excel
+        monthly_df["start_date"] = monthly_df["start_date"].dt.tz_localize(None)
+        monthly_df["end_date"] = monthly_df["end_date"].dt.tz_localize(None)
+    
+        # Calculate percentage move
+        monthly_df["monthly_percentage_move"] = (
+            (monthly_df["close"] - monthly_df["open"]) / monthly_df["open"] * 100
+        )
+    
+        # Add stock name to each entry
+        monthly_df["stock"] = stock  
+    
+        new_data = monthly_df.reset_index(drop=True)
+        self.existing_data = pd.concat([self.existing_data, new_data], ignore_index=True)
+
+    def calculate_weekly_ohlc(self, candles, stock):
+        df = pd.DataFrame(candles)
+    
+        # Ensure datetime format and remove timezone
+        df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
+        df.sort_values("time", inplace=True)
+    
+        # Define a custom week grouping (Week starts on Monday and ends on Thursday)
+        df["week_start"] = df["time"] - pd.to_timedelta((df["time"].dt.weekday - 0) % 7, unit="D")
+    
+        # Add an extra column to explicitly mark Thursday as the end of the week
+        df["week_end"] = df["week_start"] + pd.Timedelta(days=3)  # Week ends 3 days after Monday
+    
+        # Aggregate OHLC values based on week start
+        weekly_df = df.groupby("week_start").agg(
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+            start_date=("time", "first"),
+            end_date=("time", "last"),
+        )
+    
+        # Add week_end explicitly as Thursday
+        weekly_df["end_date"] = weekly_df["start_date"] + pd.Timedelta(days=3)  # End date explicitly set as Thursday
+    
+        # Remove timezone from start_date and end_date
+        weekly_df["start_date"] = weekly_df["start_date"].dt.tz_localize(None)
+        weekly_df["end_date"] = weekly_df["end_date"].dt.tz_localize(None)
+    
+        # Calculate weekly percentage move
+        weekly_df["weekly_percentage_move"] = (
+            (weekly_df["close"] - weekly_df["open"]) / weekly_df["open"] * 100
+        )
+    
+        # Add stock name to each entry
+        weekly_df["stock"] = stock  
+    
+        # Reset index and add new data to the existing data
+        new_data = weekly_df.reset_index(drop=True)
+        self.existing_data = pd.concat([self.existing_data, new_data], ignore_index=True)
+
+
     def read_high_volume_stock(self, excel, sheet_name):
         try:
             # Read the data from the specified sheet in the Excel file
@@ -191,7 +282,20 @@ class trade_book:
         # Save the summary to a new sheet in the same workbook
         with pd.ExcelWriter(self.file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
             summary.to_excel(writer, sheet_name="summary-stockWise", index=False)
-    def empty_backtrace_Sheet(self):
+
+
+        # Group by stock and count number of profit and loss trades
+        profit_loss_summary = self.existing_data.copy()
+        profit_loss_summary['TradeType'] = profit_loss_summary[profit_column_name].apply(lambda x: 'Profit' if x > 0 else 'Loss')
+
+        # Count profit and loss trades per stock
+        profit_loss_count = profit_loss_summary.groupby([stock_column_name, 'TradeType']).size().unstack(fill_value=0).reset_index()
+
+        # Save the profit/loss count to a new sheet
+        with pd.ExcelWriter(self.file_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+            profit_loss_count.to_excel(writer, sheet_name="summary-tradeCounts", index=False)
+
+    def empty_Sheet(self):
         self.existing_data = pd.DataFrame()
 
 
