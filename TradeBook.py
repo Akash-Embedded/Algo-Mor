@@ -235,6 +235,8 @@ class trade_book:
             "exit_price": getattr(exit_candle, 'close'),
             "exit_date":  getattr(exit_candle, 'time').replace(tzinfo=None),
             "PL": profit_loss,
+            "entry_rsi":getattr(entry_candle, 'rsi'),
+            "exit_rsi": getattr(exit_candle, 'rsi'),
         }]
         new_data = pd.DataFrame(data)
         self.existing_data = pd.concat([self.existing_data, new_data], ignore_index=True)

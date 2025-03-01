@@ -22,12 +22,12 @@ if len(sys.argv) != 2:
 file_path = sys.argv[1]
 
 def update_profit(stock, candles, cluster_dict, phase, book):
-    starting_date = getattr(candles[-((cluster_dict["age"])+1)], 'time')
+    starting_date = getattr(candles[-((cluster_dict["age"]))], 'time')
     starting_date = starting_date.replace(tzinfo=None)
-    start_price = getattr(candles[-((cluster_dict["age"])+1)], 'close')
+    start_price = getattr(candles[-((cluster_dict["age"]))], 'close')
     print(f'\n{phase} phase' + f' for {cluster_dict["age"]} days' + f' start on - {starting_date}' +f' start at - {start_price}\n')
     #print(f'price = ')
-    entry_candle = candles[-((cluster_dict["age"])+1)]
+    entry_candle = candles[-((cluster_dict["age"]))]
     exit_candle = candles[-1]
     if phase == "Bull" :
         profit_loss = ((getattr(exit_candle, 'close') - getattr(entry_candle, 'close'))/getattr(entry_candle, 'close')) * 100
@@ -37,74 +37,69 @@ def update_profit(stock, candles, cluster_dict, phase, book):
 
 def main():
     # Define the path to the Excel file
-    overall_periad = 900
+    overall_periad = 2000
 
     client = broker.smart_client(r'D:\Akash\Share Market\Algo\MyAlgo')
     # Load the book stock list
     print (file_path)
     book = excel_book.trade_book(file_path, "backtrace")
-    book.empty_backtrace_Sheet()
+    book.empty_Sheet()
     short_term_periods = [2, 5, 8, 12, 15, 20]
     long_term_periods = [25, 30, 35, 40, 45]
     mor = Mor(short_term_periods, long_term_periods)
     cluster = Mor([5], [13,21])
     count = 0
-    for stock in book.stocks:
+
+    for stock in book.stocks :
     #if True:
-    #    stock = "TRENT"
-        count += 1
+        #stock = "TRENT"
+        count += 1 
         print(f'{count}- ' + f'{stock}, ' +  f'Time - {datetime.now()}')
 
         now = datetime.now()
-
-        # Replace the time part with midnight (00:00:00)
         mor_current_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        mor_candles_count = 0
 
-        outer_end_date = mor_current_date - timedelta(days=overall_periad)
+        while mor_candles_count < overall_periad:
 
-        while mor_current_date >= outer_end_date:
-            
-            # search for mor indicator trend 
-            current_stocks_data = client.get_historical_data(stock, "ONE_DAY", 1000, mor_current_date)
+            current_stocks_data = client.get_historical_data(stock, "ONE_DAY", 2000, mor_current_date, "indices")
+
             if len(current_stocks_data):
                 mor_candles = current_stocks_data[stock]['candles']
-                mor_dict = mor.indicator(current_stocks_data[stock]['candles'])
+                mor_dict = mor.indicator(mor_candles)
                 mor_phase = mor_dict["indicator"]
-                mor_candles = current_stocks_data[stock]['candles']
-                index = len(mor_candles) - mor_dict["age"]
+                
+                mor_candles_count += mor_dict["age"]
+                mor_start_index = len(mor_candles) - mor_dict["age"]
+                mor_end_index = len(mor_candles)
 
                 # first position start at mor and end at short term cluster reversal
-                cluster_dict = cluster.signal_end(current_stocks_data[stock]['candles'], index, mor_dict["age"], mor_phase) #trade start
-                candles = current_stocks_data[stock]['candles'][0:(index+cluster_dict["age"])]
-                current_date = getattr(candles[-1], 'time')
-                current_date = current_date.replace(tzinfo=None)
+                cluster_dict = cluster.signal_end(mor_candles, mor_start_index, mor_dict["age"], mor_phase) #trade start
+                short_end_index = mor_start_index+cluster_dict["age"]
+                candles = mor_candles[0:short_end_index]
                 update_profit(stock, candles, cluster_dict, mor_phase, book)
-            
-                cluster_current_date = mor_current_date
-                cluster_end_date = current_date
+
+                short_start_index = short_end_index
+                short_end_index = mor_end_index
                 # now follow short term cluster till current mor trend
-                while(cluster_end_date < cluster_current_date):
-                    #print("Processing stock - ",stock)
-                    #print(datetime.now())
-                    current_stocks_data = client.get_historical_data(stock, "ONE_DAY", 200, cluster_current_date)
-                    if len(current_stocks_data) != 0:
-                        cluster_dict = cluster.indicator(current_stocks_data[stock]['candles'])
+                while(short_start_index < short_end_index):
+                    candles = mor_candles[short_start_index: short_end_index]
+                    if len(candles) != 0:
+                        cluster_dict = cluster.indicator(candles)
                         phase = cluster_dict["indicator"]
                         if phase != "No Signal":
-                            candles = current_stocks_data[stock]['candles']
-                            cluster_current_date = getattr(candles[-((cluster_dict["age"]) + 2)], 'time')
-                            cluster_current_date = cluster_current_date.replace(tzinfo=None)
+                            short_end_index = short_end_index - cluster_dict["age"]
                             if (cluster_dict["age"]) == 0: #bug age can't be zero, posistion will not close same day
                                 cluster_dict["age"]  = 1
-                                cluster_current_date = cluster_current_date - timedelta(days=1)
+                                short_end_index -=1
                             if phase == mor_phase:
                                 update_profit(stock, candles, cluster_dict, phase, book)
                             else:
-                                print("Next stock")
-                                cluster_current_date = cluster_current_date - timedelta(days=2)
+                                short_end_index -= 2
+                        else:
+                            short_end_index -= 2
                     else:
-                        print("Next stock")
-                        cluster_current_date = cluster_current_date - timedelta(days=5)
+                        short_end_index -= 2
                         break
                 mor_current_date = mor_dict["time"]
                 mor_current_date = mor_current_date - timedelta(days=1)

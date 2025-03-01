@@ -5,7 +5,7 @@ from collections import namedtuple
 from datetime import datetime
 
 class base_strategy:
-    def check_crossovers(self, hist_data, crossing_periods, base_periods):
+    def check_crossovers(self, hist_data, crossing_periods, base_periods, rsi=False):
 
         # Iterate through each row of data to check for crossovers
         first_clear_signal = "No Signal"
@@ -36,13 +36,14 @@ class base_strategy:
             if (signal == "Bull" or signal == "Bear" ):
                 if first_clear_signal == "No Signal":
                     first_clear_signal = signal
+                    rsi_on_first_signal = getattr(hist_data[idx], 'rsi')
                 elif signal != first_clear_signal:
                     second_clear_signal = signal
                     break
     
         if first_clear_signal != "No Signal" and second_clear_signal != "No Signal":
             signal =  "No Signal"
-            for i in range(idx, len(hist_data)):
+            for i in range(idx+1, len(hist_data)):
                 days_count -= 1
                 crossing_ma = []
                 for period in crossing_periods:
@@ -72,6 +73,33 @@ class base_strategy:
                             return_dict["ma_200_cross"] = "False"
                     else:
                         return_dict["ma_200_cross"] = ""
+
+                    age_as_per_rsi = 0
+                    if rsi == True:
+                        #return_dict["enter_rsi"] = rsi_on_first_signal
+                        for j in range(i, i+days_count):
+                            if signal == "Bull":
+                                if age_as_per_rsi > 2 :
+                                    comparision = 50 + age_as_per_rsi
+                                else :
+                                    comparision = 50
+
+                                if getattr(hist_data[j], 'rsi') > comparision:
+                                    age_as_per_rsi += 1
+                                else:
+                                    break
+                            if signal == "Bear":
+                                if age_as_per_rsi > 2 :
+                                    comparision = 50 - age_as_per_rsi 
+                                else :
+                                    comparision = 50
+                                if getattr(hist_data[j], 'rsi') < comparision:
+                                    age_as_per_rsi += 1
+                                else:
+                                    break
+
+                        return_dict["age_as_per_rsi"] = age_as_per_rsi
+
                     return return_dict 
         elif (first_clear_signal != "No Signal" and second_clear_signal == "No Signal" and idx == 1):
             return_dict["time"]= hist_data[idx].time
@@ -94,7 +122,7 @@ class Mor(base_strategy):
         self.long_term_ema_periods = long_term_ema_periods
         self.long_term_ma = long_term_ma
 
-    def indicator(self, hist_data, sma_200 = False):
+    def indicator(self, hist_data, rsi = False, sma_200 = False):
         """
         Analyze the trading signal based on EMA crossovers and trends.
     
@@ -117,7 +145,7 @@ class Mor(base_strategy):
         #    return return_dict
 
         # Check for crossovers and continuous trends
-        return_dict = self.check_crossovers(hist_data, self.short_term_ema_periods, self.long_term_ema_periods)
+        return_dict = self.check_crossovers(hist_data, self.short_term_ema_periods, self.long_term_ema_periods, rsi)
         return return_dict
     
     def signal_end(self,hist_data, index, with_in_days, current_signal):

@@ -11,15 +11,17 @@ import threading
 import numpy as np
 from collections import namedtuple
 from datetime import datetime
+from SmartApi.smartWebSocketV2 import SmartWebSocketV2
+
 
 class smart_client:
     def __init__(self, credential_path: str):
         self.credential_path = credential_path
         self.obj = None
         self.instrument_list = None
-        self.ema_periods = [2, 5, 8, 12, 13, 15, 20, 21, 25, 30, 35, 40, 45, 50]
+        self.ema_periods = [2, 5, 8, 10, 12, 13, 15, 20, 21, 25, 30, 35, 40, 45, 50]
         self.sma_periods = [200]
-        self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'rsi'] + \
+        self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'rsi', 'rsi_crossing_positive', 'rsi_crossing_negative'] + \
                                  [f'EMA_{period}' for period in self.ema_periods] + \
                                  [f'SMA_{period}' for period in self.sma_periods])
         # Define the NamedTuple for Stock Data
@@ -43,6 +45,8 @@ class smart_client:
         self.obj = SmartConnect(api_key=self.api_key)
         totp_now = TOTP(self.totp_secret).now()
         self.session_data = self.obj.generateSession(self.username, self.password, totp_now)
+        self.feed_token = self.obj.getfeedToken()
+        self.auth_token = self.session_data["data"]["jwtToken"]
 
     def _load_instruments(self):
         """Load instrument list from the API."""
@@ -69,6 +73,10 @@ class smart_client:
                     return instrument["token"]
         print("ticker not found\n")
         return None
+    
+    def create_web_socket(self):
+        self.sws = SmartWebSocketV2(self.auth_token, self.api_key, self.username, self.feed_token)
+        return self.sws
 
     def get_historical_data(self, ticker, duration, number_of_candle, end_date=None, symbol=''):
         hist_data_tickers = {}
@@ -99,7 +107,8 @@ class smart_client:
         symboltoken = self.token_lookup(ticker, symbol)
         if symboltoken == None:
             return hist_data_tickers
-        try:
+        if True:
+        #try:
             params = {
                 "exchange": "NSE",
                 "symboltoken": symboltoken,
@@ -125,7 +134,11 @@ class smart_client:
                 for period in self.sma_periods:
                     df[f'SMA_{period}'] = df['close'].rolling(period).mean()
 
-                #self.calculate_rsi(df, 14)
+                self.calculate_rsi(df, 14)
+                #df['rsi'] = 0
+                #df['rsi_crossing_negative'] = 0
+                #df['rsi_crossing_positive'] = 0
+
 
                 # Convert DataFrame rows into a list of 'candle' namedtuples
                 candle_list = []
@@ -143,14 +156,16 @@ class smart_client:
                                           close=row["close"],
                                           volume=row["volume"], 
                                           volume_20_ma=row["volume_20_ma"] if not pd.isna(row["volume_20_ma"]) else None,
-                                          rsi=None,
+                                          rsi=row["rsi"] if not pd.isna(row["rsi"]) else None,
+                                          rsi_crossing_negative = row["rsi_crossing_negative"],
+                                          rsi_crossing_positive = row["rsi_crossing_positive"],
                                           **ema_values,
                                           **sma_values))
                     hist_data_tickers[ticker] = {
                     "candles": candle_list,
                     }
-        except:
-            pass
+        #except:
+        #    pass
         return hist_data_tickers
 
     @staticmethod
@@ -158,16 +173,43 @@ class smart_client:
         """Calculate Exponential Moving Average (EMA)."""
         return series.ewm(span=n, adjust=False).mean()
     
-    def calculate_rsi(df, period=14):
-            # Add RSI Calculation
-            period = 14  # Default RSI period
-            delta = df['close'].diff()
-            gain = delta.where(delta > 0, 0)
-            loss = -delta.where(delta < 0, 0)
-            avg_gain = gain.rolling(window=period, min_periods=1).mean()
-            avg_loss = loss.rolling(window=period, min_periods=1).mean()
-            rs = avg_gain / avg_loss
-            df['RSI'] = 100 - (100 / (1 + rs))
+    def calculate_rsi(self, df, period=14):
+        """Calculate RSI for a DataFrame with smoothing on average gains and losses."""
+        # Calculate the price changes
+        delta = df['close'].diff()
+        
+        # Separate gains and losses
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        
+        # Calculate the initial average gain and average loss (simple average of the first 'period' values)
+        avg_gain = gain[:period].mean()
+        avg_loss = loss[:period].mean()
+    
+        # For the subsequent values, apply smoothing
+        avg_gain_series = [avg_gain] * period
+        avg_loss_series = [avg_loss] * period
+    
+        # Calculate the rest of the average gains and losses
+        for i in range(period, len(df)):
+            avg_gain = (avg_gain * (period - 1) + gain.iloc[i]) / period
+            avg_loss = (avg_loss * (period - 1) + loss.iloc[i]) / period
+            avg_gain_series.append(avg_gain)
+            avg_loss_series.append(avg_loss)
+    
+        # Convert lists into pandas Series
+        avg_gain_series = pd.Series(avg_gain_series, index=df.index)
+        avg_loss_series = pd.Series(avg_loss_series, index=df.index)
+    
+        # Calculate Relative Strength (RS)
+        rs = avg_gain_series / avg_loss_series
+        
+        # Calculate RSI
+        df['rsi'] = 100 - (100 / (1 + rs))
+
+        df['rsi_crossing_negative'] = 0
+        df['rsi_crossing_positive'] = 0
+        return df
 
     @staticmethod
     def calculate_macd(df, a=12, b=26, c=9):
@@ -237,3 +279,90 @@ class smart_client:
         ]
         stock_history[stock]['candles'] = filtered_candles
 
+    def place_limit_order(self, ticker, buy_sell, quantity, producttype, 
+                     variety = "NORMAL", price = 0, duration = "DAY", symbol=''):
+        hist_data_tickers = {}
+    
+        symboltoken = self.token_lookup(ticker, symbol)
+        if symboltoken == None:
+            return hist_data_tickers
+        if True:
+        #try:
+            params = {
+                    "variety":variety,
+                    "tradingsymbol":"{}-EQ".format(ticker),
+                    "symboltoken":symboltoken,
+                    "transactiontype":buy_sell,
+                    "exchange":"NSE",
+                    "ordertype":"LIMIT",
+                    "producttype":producttype,
+                    "duration": duration,
+                    "price":price,
+                    "quantity": quantity
+                    }
+            response = self.obj.placeOrder(params)
+        return response
+
+    def place_market_order(self, ticker, buy_sell, quantity, producttype, 
+                     variety = "NORMAL", duration = "DAY", symbol=''):
+        hist_data_tickers = {}
+    
+        symboltoken = self.token_lookup(ticker, symbol)
+        if symboltoken == None:
+            return hist_data_tickers
+        if True:
+        #try:
+            params = {
+                    "variety":variety,
+                    "tradingsymbol":"{}-EQ".format(ticker),
+                    "symboltoken":symboltoken,
+                    "transactiontype":buy_sell,
+                    "exchange":"NSE",
+                    "ordertype":"MARKET",
+                    "producttype":producttype,
+                    "duration": duration,
+                    "quantity": quantity
+                    }
+            response = self.obj.placeOrder(params)
+        return response
+
+    def modify_order(self, ticker, order_id, quantity, producttype, 
+                     variety = "NORMAL", price = 0, ordertype = "MARKET", duration = "DAY", symbol=''):
+        hist_data_tickers = {}
+    
+        symboltoken = self.token_lookup(ticker, symbol)
+        if symboltoken == None:
+            return hist_data_tickers
+        if True:
+        #try:
+            params = {
+                    "variety":variety,
+                    "orderid":order_id,
+                    "ordertype":ordertype,
+                    "producttype":producttype,
+                    "duration":duration,
+                    "price":price,
+                    "quantity":quantity,
+                    "tradingsymbol":"{}-EQ".format(ticker),
+                    "symboltoken":symboltoken,
+                    "exchange":"NSE"
+                    }
+            response = self.obj.placeOrder(params)
+        return response
+
+    def cancel_order(self, order_id, variety = "NORMAL"):
+        response = self.obj.cancelOrder(order_id, variety)
+        return response
+    
+    def order_book(self):
+        response = self.obj.orderBook()
+        df = pd.DataFrame(response['data'])
+        return (df[df["orderstatus"] == "open"])
+
+    def get_ltp(self, ticker, symbol):
+        response = []
+        symboltoken = self.token_lookup(ticker, symbol)
+        if symboltoken == None:
+            return response
+        response = self.obj.ltpData("NSE", "{}-EQ".format(ticker), symboltoken)
+        
