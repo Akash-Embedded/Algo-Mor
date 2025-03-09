@@ -89,22 +89,33 @@ class trade_book:
             "mor": mor_dict["indicator"],
             "mor_age": mor_dict["age"],
             "mor_date": mor_dict["time"].replace(tzinfo=None),
+            "cluster": short_dict["indicator"],
+            "cluster_age": short_dict["age"],
+            "cluster_date": short_dict["time"].replace(tzinfo=None),
             "price_above_200_sma": mor_dict["ma_200_cross"],
+            "sma_200": current_candle.SMA_200,
+            "sma_100": current_candle.SMA_100,
+            "sma_50": current_candle.SMA_50,
+
         }]
         new_data = pd.DataFrame(data)
+
+        indicator_columns = ["name", "volume_change", "price_change", "date", "open", "high", "low", "close", "volume",
+                            "volume_20_ma", "rsi", "mor", "mor_age", "mor_date", "price_above_200_sma",
+                            "cluster", "cluster_age", "cluster_date", "sma_200", "sma_100", "sma_50"]
     
         try:
         #if True:
     
             # Ensure matching columns between existing_data and new_data
-            for col in ["volume_change", "price_change", "date", "open", "high", "low", "close", "volume", "volume_20_ma", "rsi", "mor", "mor_age", "mor_date", "price_above_200_sma"]:
+            for col in indicator_columns:
                 if col in self.existing_data.columns and col in new_data.columns:
                     new_data[col] = new_data[col].astype(self.existing_data[col].dtype, errors="ignore")
     
             # Update matching stock row or append if it doesn't exist
             if stock in self.existing_data["name"].values:
                 # Replace matching columns with new data
-                for col in ["volume_change", "price_change", "date", "open", "high", "low", "close", "volume", "volume_20_ma", "rsi", "mor", "mor_age", "mor_date", "price_above_200_sma"]:
+                for col in indicator_columns:
                     self.existing_data.loc[self.existing_data["name"] == stock, col] = new_data[col].values[0]
             else:
                 # Append new row for non-existing stock

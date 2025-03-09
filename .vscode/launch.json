@@ -7,8 +7,9 @@
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
-      //"args": ["TradeBook_Nifty20_Indicator.xlsx"]  // Replace with your actual arguments
-      "args": ["indices\\indices.xlsx"]  // Replace with your actual arguments
+      "args": ["excels\\TradeBook_Nifty20_Indicator.xlsx"]  // Replace with your actual arguments
+      //"args": ["excels\\TradeBook_Indicator.xlsx"]  // Replace with your actual arguments
+      //"args": ["indices\\indices.xlsx"]  // Replace with your actual arguments
     }
   ]
 }

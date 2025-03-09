@@ -20,7 +20,7 @@ class smart_client:
         self.obj = None
         self.instrument_list = None
         self.ema_periods = [2, 5, 8, 10, 12, 13, 15, 20, 21, 25, 30, 35, 40, 45, 50]
-        self.sma_periods = [200]
+        self.sma_periods = [200, 100, 50]
         self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'rsi', 'rsi_crossing_positive', 'rsi_crossing_negative'] + \
                                  [f'EMA_{period}' for period in self.ema_periods] + \
                                  [f'SMA_{period}' for period in self.sma_periods])
