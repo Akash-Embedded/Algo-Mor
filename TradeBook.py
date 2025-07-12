@@ -74,10 +74,12 @@ class trade_book:
     def update_indicators_sheet(self, candles, excel_path, stock, mor_dict, short_dict):
         current_candle = candles[-1]
         past_candle = candles[-2]
+        mor_entry_candle = candles[-(mor_dict["age"]+1)]
+        short_entry_candle = candles[-(short_dict["age"]+1)]
         data = [{
             "name": stock,
-            "volume_change": ((current_candle.volume - current_candle.volume_20_ma) / current_candle.volume_20_ma) * 100,
-            "price_change": ((current_candle.close - past_candle.close) / past_candle.close) * 100,
+            "volume_change": round(((current_candle.volume - current_candle.volume_20_ma) / current_candle.volume_20_ma) * 100, 3),
+            "price_change": round(((current_candle.close - past_candle.close) / past_candle.close) * 100, 2),
             "date": current_candle.time.replace(tzinfo=None),  # Remove timezone info
             "open": current_candle.open,
             "high": current_candle.high,
@@ -88,9 +90,11 @@ class trade_book:
             "rsi": current_candle.rsi,
             "mor": mor_dict["indicator"],
             "mor_age": mor_dict["age"],
-            "mor_date": mor_dict["time"].replace(tzinfo=None),
+            "mor_price_change": round(((current_candle.close - mor_entry_candle.close) / mor_entry_candle.close) * 100, 2),
+            "mor_date": mor_dict["time"].replace(tzinfo= None),
             "cluster": short_dict["indicator"],
             "cluster_age": short_dict["age"],
+            "cluster_price_change": round(((current_candle.close - short_entry_candle.close) / short_entry_candle.close) * 100, 2),
             "cluster_date": short_dict["time"].replace(tzinfo=None),
             "price_above_200_sma": mor_dict["ma_200_cross"],
             "sma_200": current_candle.SMA_200,
@@ -101,8 +105,8 @@ class trade_book:
         new_data = pd.DataFrame(data)
 
         indicator_columns = ["name", "volume_change", "price_change", "date", "open", "high", "low", "close", "volume",
-                            "volume_20_ma", "rsi", "mor", "mor_age", "mor_date", "price_above_200_sma",
-                            "cluster", "cluster_age", "cluster_date", "sma_200", "sma_100", "sma_50"]
+                            "volume_20_ma", "rsi", "mor", "mor_age", "mor_price_change", "mor_date", "price_above_200_sma",
+                            "cluster", "cluster_age", "cluster_price_change", "cluster_date", "sma_200", "sma_100", "sma_50"]
     
         try:
         #if True:
@@ -236,11 +240,18 @@ class trade_book:
             self.existing_data.to_excel(writer, self.sheet_name, index=False)
 
 
-    def update_backtrace_sheet(self, stock, phase, entry_candle, exit_candle, mor_age, profit_loss):
+    def update_backtrace_sheet(self, stock, dict, entry_candle, exit_candle):
+        phase = dict["indicator"]
+        age = dict["age"]
+        if phase == "Bull" :
+            profit_loss = ((getattr(exit_candle, 'close') - getattr(entry_candle, 'close'))/getattr(entry_candle, 'close')) * 100
+        else:
+            profit_loss = ((getattr(entry_candle, 'close') - getattr(exit_candle, 'close'))/getattr(entry_candle, 'close')) * 100
+
         data = [{
             "name": stock,
             "phase": phase, 
-            "age" : mor_age,
+            "age" : age,
             "entry_price":getattr(entry_candle, 'close'),
             "entry_date": getattr(entry_candle, 'time').replace(tzinfo=None),
             "exit_price": getattr(exit_candle, 'close'),
@@ -310,5 +321,39 @@ class trade_book:
 
     def empty_Sheet(self):
         self.existing_data = pd.DataFrame()
+
+    def calculate_daily_moves_in_week(self, candles, stock):
+        df = pd.DataFrame(candles)
+
+        # Ensure datetime format and remove timezone
+        df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
+        df.sort_values("time", inplace=True)
+
+        # Define a custom week grouping (Week starts on Monday and ends on Thursday)
+        df["week_start"] = df["time"] - pd.to_timedelta((df["time"].dt.weekday - 0) % 7, unit="D")
+
+        # Add weekday name and calculate absolute daily percentage move
+        df["weekday"] = df["time"].dt.day_name()
+        df["daily_percentage_move"] = abs((df["high"] - df["low"]) / df["low"]) * 100
+
+        # Group by week_start and weekday to calculate daily moves
+        daily_moves = df.groupby(["week_start", "weekday"]).agg(
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+            daily_percentage_move=("daily_percentage_move", "mean")
+        ).reset_index()
+
+        # Pivot the data to create separate columns for each weekday
+        daily_moves_pivot = daily_moves.pivot(index="week_start", columns="weekday", values="daily_percentage_move").reindex(
+            columns=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        ).reset_index()
+
+        # Add stock name to each entry
+        daily_moves_pivot["stock"] = stock
+
+        # Reset index and add new data to the existing data
+        self.existing_data = pd.concat([self.existing_data, daily_moves_pivot], ignore_index=True)
 
 

@@ -5,13 +5,8 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)
 
 import TradeBook as excel_book
-import my_algo as algo
-import threading
 from datetime import datetime, timedelta, time
-import time as tim
-import time
 import Smart_API_Client as broker
-from threading import Lock
 from tracking import Mor
 import sys
 
@@ -30,12 +25,7 @@ def update_profit(stock, candles, cluster_dict, phase, book):
     starting_date = starting_date.replace(tzinfo=None)
     start_price = getattr(entry_candle, 'close')
     print(f'\n{phase} phase' + f' for {cluster_dict["age"]} days' + f' start on - {starting_date}' +f' start at - {start_price}\n')
-    #print(f'price = ')
-    if phase == "Bull" :
-        profit_loss = ((getattr(exit_candle, 'close') - getattr(entry_candle, 'close'))/getattr(entry_candle, 'close')) * 100
-    else:
-        profit_loss = ((getattr(entry_candle, 'close') - getattr(exit_candle, 'close'))/getattr(entry_candle, 'close')) * 100
-    book.update_backtrace_sheet(stock, phase, entry_candle, exit_candle, cluster_dict["age"], profit_loss)
+    book.update_backtrace_sheet(stock, cluster_dict, entry_candle, exit_candle)
 
 
 def is_daily_have_same_trend(cluster_dict, daily_candles,candles):
@@ -57,12 +47,12 @@ def is_daily_have_same_trend(cluster_dict, daily_candles,candles):
     for candle in reversed(daily_candles):
         if candle.time.date() == cluster_date:
             if cluster_dict["indicator"] == "Bull":
-                if candle.EMA_5 > candle.EMA_13 and candle.EMA_5 > candle.EMA_21:
-#                 if   candle.rsi < 58 and candle.rsi > 42 and timecross == 1:
+                if candle.rsi > 35 and candle.rsi < 65 and \
+                    (candle.EMA_5 > candle.EMA_13 and candle.EMA_5 > candle.EMA_21):
                     return True
             elif cluster_dict["indicator"] == "Bear":
-                if candle.EMA_5 < candle.EMA_13 and candle.EMA_5 < candle.EMA_21:
-#                if  candle.rsi > 42 and candle.rsi < 58 and timecross == 1:
+                if candle.rsi > 35 and candle.rsi < 65 and \
+                    (candle.EMA_5 < candle.EMA_13 and candle.EMA_5 < candle.EMA_21):
                     return True
             return False
     return False
@@ -95,7 +85,6 @@ def is_daily_have_same_trend(cluster_dict, daily_candles,candles):
 #    return False
 
 def main():
-    # Define the path to the Excel file
     overall_periad = 9000
 
     client = broker.smart_client(r'D:\Akash\Share Market\Algo\MyAlgo')
@@ -124,7 +113,7 @@ def main():
         daily_candles = day_stocks_data[stock]['candles']
 
         while candles_count < overall_periad:
-            current_stocks_data = client.get_historical_data(stock, "FIFTEEN_MINUTE", 8000, current_date, 'indices')
+            current_stocks_data = client.get_historical_data(stock, "TEN_MINUTE", 8000, current_date, 'indices')
             candles = current_stocks_data[stock]['candles']
             
             counts = len(candles)

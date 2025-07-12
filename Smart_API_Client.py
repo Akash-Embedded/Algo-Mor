@@ -21,9 +21,10 @@ class smart_client:
         self.instrument_list = None
         self.ema_periods = [2, 5, 8, 10, 12, 13, 15, 20, 21, 25, 30, 35, 40, 45, 50]
         self.sma_periods = [200, 100, 50]
-        self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'rsi', 'rsi_crossing_positive', 'rsi_crossing_negative'] + \
+        self.candle = namedtuple('candle', ['time', 'open', 'high', 'low', 'close', 'volume', 'volume_20_ma', 'volume_5_ma', 'rsi', 'rsi_crossing_positive', 'rsi_crossing_negative'] + \
                                  [f'EMA_{period}' for period in self.ema_periods] + \
                                  [f'SMA_{period}' for period in self.sma_periods])
+        self.option_candle = namedtuple('option_candle', ['time', 'open', 'high', 'low', 'close', 'volume'])
         # Define the NamedTuple for Stock Data
         self.stock_data = namedtuple('stock_data', ['name', 'history'])
 
@@ -65,6 +66,13 @@ class smart_client:
                 ):
                     return instrument["token"]
         elif symbol == "indices":
+            for instrument in self.instrument_list:
+                if (
+                    instrument["symbol"] == ticker
+                    and instrument["exch_seg"] == exchange
+                ):
+                    return instrument["token"]
+        elif symbol == "options":
             for instrument in self.instrument_list:
                 if (
                     instrument["symbol"] == ticker
@@ -130,6 +138,11 @@ class smart_client:
                 df['volume_20_ma'] = df['volume'].rolling(window=20).mean()
                 for period in self.ema_periods:
                     df[f'EMA_{period}'] = df['close'].ewm(span=period, adjust=False).mean()
+
+                # Calculate the 5-day moving average
+                df['volume_5_ma'] = df['volume'].rolling(window=5).mean()
+                for period in self.ema_periods:
+                    df[f'EMA_{period}'] = df['close'].ewm(span=period, adjust=False).mean()
                 
                 for period in self.sma_periods:
                     df[f'SMA_{period}'] = df['close'].rolling(period).mean()
@@ -156,6 +169,7 @@ class smart_client:
                                           close=row["close"],
                                           volume=row["volume"], 
                                           volume_20_ma=row["volume_20_ma"] if not pd.isna(row["volume_20_ma"]) else None,
+                                          volume_5_ma=row["volume_5_ma"] if not pd.isna(row["volume_5_ma"]) else None,
                                           rsi=row["rsi"] if not pd.isna(row["rsi"]) else None,
                                           rsi_crossing_negative = row["rsi_crossing_negative"],
                                           rsi_crossing_positive = row["rsi_crossing_positive"],
@@ -175,6 +189,11 @@ class smart_client:
     
     def calculate_rsi(self, df, period=14):
         """Calculate RSI for a DataFrame with smoothing on average gains and losses."""
+        if len(df) < period:
+            df["rsi"] = float("nan")
+            df["rsi_crossing_negative"] = 0
+            df["rsi_crossing_positive"] = 0
+            return df
         # Calculate the price changes
         delta = df['close'].diff()
         
@@ -366,3 +385,67 @@ class smart_client:
             return response
         response = self.obj.ltpData("NSE", "{}-EQ".format(ticker), symboltoken)
         
+
+    def get_option_historical_data(self, ticker, duration, number_of_candle, end_date=None):
+        hist_data_tickers = {}
+    
+        # Define mapping of duration to minutes
+        duration_mapping = {
+            "ONE_MINUTE": 1,
+            "THREE_MINUTE": 3,
+            "FIVE_MINUTE": 5,
+            "TEN_MINUTE": 10,
+            "FIFTEEN_MINUTE": 15,
+            "THIRTY_MINUTE": 30,
+            "ONE_HOUR": 60,
+            "ONE_DAY": 1440,  # 24 hours * 60 minutes
+        }
+    
+        if duration not in duration_mapping:
+            raise ValueError(f"Invalid duration: {duration}. Valid options are: {list(duration_mapping.keys())}")
+    
+        # Calculate the total time span in minutes
+        total_minutes = duration_mapping[duration] * number_of_candle
+       # Use the provided end_date or default to the current datetime
+        if end_date is None:
+            end_date = dt.datetime.now()
+
+        start_date = end_date - dt.timedelta(minutes=total_minutes)
+        #for ticker in tickers:
+        symboltoken = self.token_lookup(ticker, "options", "NFO")
+        if symboltoken == None:
+            return hist_data_tickers
+        if True:
+        #try:
+            params = {
+                "exchange": "NFO",
+                "symboltoken": symboltoken,
+                "interval": duration,
+                "fromdate": start_date.strftime("%Y-%m-%d %H:%M"),
+                "todate": end_date.strftime("%Y-%m-%d %H:%M"),
+            }
+            time.sleep(0.4)
+            response = self.obj.getCandleData(params)
+            if "data" in response:
+                df = pd.DataFrame(
+                    response["data"],
+                    columns=["date", "open", "high", "low", "close", "volume"],
+                )
+                df["date"] = pd.to_datetime(df["date"])
+                df.set_index("date", inplace=True)
+
+                # Convert DataFrame rows into a list of 'candle' namedtuples
+                candle_list = []
+                for _, row in df.iterrows():
+                    candle_list.append(self.option_candle(time=row.name,  # Date is the index of the row
+                                          open=row["open"],
+                                          high=row["high"],
+                                          low=row["low"],
+                                          close=row["close"],
+                                          volume=row["volume"]))
+                    hist_data_tickers[ticker] = {
+                    "candles": candle_list,
+                    }
+        #except:
+        #    pass
+        return hist_data_tickers
